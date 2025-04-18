@@ -3,6 +3,32 @@ import pandas as pd
 import uuid
 
 st.set_page_config(page_title="Best Friends Pet Care Center Pricing", layout="wide")
+
+# --- Load center data ---
+center_df = pd.read_excel("Best Friends Location Info.xlsx")
+# Normalize column names for robust access
+center_df.columns = [c.strip().lower() for c in center_df.columns]
+
+# Use correct column names from your sheet
+manager_col = "district manager"
+center_col = "ctr name"
+address_col = "full address"
+
+manager_list = sorted(center_df[manager_col].dropna().unique())
+
+# --- District Manager selection ---
+st.header("Center & Manager Information")
+dm_selected = st.selectbox("Select your District Manager", manager_list)
+filtered_centers = center_df[center_df[manager_col] == dm_selected]
+center_names = filtered_centers[center_col].dropna().unique()
+center_selected = st.selectbox("Select your Center", center_names)
+center_row = filtered_centers[filtered_centers[center_col] == center_selected].iloc[0]
+full_address = center_row.get(address_col, "")
+
+st.markdown(f"**Selected Center:** {center_selected}")
+st.markdown(f"**Full Address:** {full_address}")
+st.markdown(f"**District Manager:** {dm_selected}")
+
 st.image("bf_logo.png", width=120)
 st.title("Best Friends Pet Care Center Pricing")
 
@@ -52,6 +78,9 @@ with st.form("add_kennel_suite_form"):
                 "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
                 "num_kennels": num_kennels,
                 "features": [f.strip() for f in features.split("\n") if f.strip()],
+                "ctr_name": center_selected,
+                "full_address": full_address,
+                "district_manager": dm_selected,
             })
             st.success(f"Added suite: {final_suite_name}")
     if error_msg:
@@ -67,6 +96,9 @@ if st.session_state.kennel_suites:
             <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (1 Dog)</h2>
             <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span><br>
             <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
+                <li><b>District Manager:</b> {suite['district_manager']}</li>
+                <li><b>Center Name:</b> {suite['ctr_name']}</li>
+                <li><b>Full Address:</b> {suite['full_address']}</li>
                 <li>Dog size: {suite['dog_size']}</li>
                 <li>Number of kennels: {suite['num_kennels']}</li>
             </ul>
@@ -85,12 +117,18 @@ if st.session_state.kennel_suites:
                 <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (2 Dogs - Shared Kennel)</h2>
                 <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_two_dogs_same_kennel'])}</span><span style='color:#fcbf49;'>/night</span><br>
                 <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
+                    <li><b>District Manager:</b> {suite['district_manager']}</li>
+                    <li><b>Center Name:</b> {suite['ctr_name']}</li>
+                    <li><b>Full Address:</b> {suite['full_address']}</li>
                     <li>Dog size: {suite['dog_size']}</li>
                     <li>Number of kennels: {suite['num_kennels']}</li>
                 </ul>
-                <ul style='color:#000; font-size:1.07em; margin:0 0 0 18px; padding-left:0;'>
-                    {''.join([f'<li>{f}</li>' for f in suite['features']])}
-                </ul>
+                <div style='margin:10px 0 0 18px;'>
+                    <strong style='color:#000;'>Features:</strong>
+                    <ul style='color:#000; font-size:1.07em; margin:4px 0 0 0; padding-left:18px;'>
+                        {''.join([f'<li>{f}</li>' for f in suite['features']])}
+                    </ul>
+                </div>
             </div>
             """, unsafe_allow_html=True)
 
