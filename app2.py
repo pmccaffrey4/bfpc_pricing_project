@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import uuid
 
-st.set_page_config(page_title="Kennel Suite Builder", layout="wide")
-st.title("Kennel Suite Builder")
+st.set_page_config(page_title="Best Friends Pet Care Center Pricing", layout="wide")
+st.image("bf_logo.png", width=120)
+st.title("Best Friends Pet Care Center Pricing")
 
 st.write("""
 Use this form to add each type of kennel suite you offer. Fill out the details for each suite, then click 'Add Suite'. All added suites will be shown below as summary cards.
@@ -14,44 +15,47 @@ if "kennel_suites" not in st.session_state:
     st.session_state.kennel_suites = []
 
 with st.form("add_kennel_suite_form"):
-    suite_name = st.selectbox(
-        "Suite Name",
-        [
-            "Small",
-            "Medium",
-            "Large",
-            "Jr. Suite",
-            "Luxury Suite",
-            "Other",
-        ],
-    )
-    col_len, col_wid = st.columns(2)
-    with col_len:
-        suite_length = st.number_input("Suite Length (ft)", min_value=0, step=1, format="%d")
-    with col_wid:
-        suite_width = st.number_input("Suite Width (ft)", min_value=0, step=1, format="%d")
-    potty_breaks = st.number_input("# of Daily Potty Breaks", min_value=0, step=1)
-    accommodates_lbs = st.number_input("Accommodates up to (lbs)", min_value=0, step=1)
-    price_per_night = st.number_input("Price per Dog per Night ($)", min_value=0.0, step=1.0)
-    price_two_dogs = st.number_input("Price per Night for 2 Dogs ($)", min_value=0.0, step=1.0)
-    price_two_dogs_same_kennel = st.number_input("Price per Night for 2 Dogs ($) - Shared Kennel", min_value=0.0, step=1.0)
+    suite_name_options = ["Standard", "Large", "Luxury", "Cat", "Cat Luxury", "Other"]
+    suite_name = st.selectbox("Suite Name", suite_name_options)
+    suite_name_custom = ""
+    if suite_name == "Other":
+        suite_name_custom = st.text_input("Please specify suite name")
+    final_suite_name = suite_name_custom.strip() if suite_name == "Other" else suite_name
 
-    features = st.text_area("Bulleted List of Features (one per line)")
+    dog_size = st.selectbox(
+        "Size of dog",
+        ["small", "medium", "big", "extra big"]
+    )
+    price_per_night = st.number_input("Price per Dog per Night ($)", min_value=0.0, step=1.0)
+    price_two_dogs_same_kennel = st.number_input("Price per Night for 2 Dogs ($) - Shared Kennel", min_value=0.0, step=1.0)
+    num_kennels = st.number_input("Number of kennels of this type", min_value=0, step=1, format="%d")
+
+    features = st.text_area(
+        "Bulleted List of Features (one per line)",
+        placeholder="e.g. climate controlled\nelevated beds"
+    )
     submitted = st.form_submit_button("Add Suite")
+    error_msg = ""
+    # Prevent duplicate suites (same name + dog size)
+    duplicate = any(s["suite_name"].lower() == final_suite_name.lower() and s["dog_size"] == dog_size for s in st.session_state.kennel_suites)
     if submitted:
-        st.session_state.kennel_suites.append({
-            "id": str(uuid.uuid4()),
-            "suite_name": suite_name,
-            "suite_length": suite_length,
-            "suite_width": suite_width,
-            "potty_breaks": potty_breaks,
-            "accommodates_lbs": accommodates_lbs,
-            "price_per_night": price_per_night,
-            "price_two_dogs": price_two_dogs,
-            "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
-            "features": [f.strip() for f in features.split("\n") if f.strip()],
-        })
-        st.success(f"Added suite: {suite_name}")
+        if suite_name == "Other" and not final_suite_name:
+            error_msg = "Please enter a custom suite name."
+        elif duplicate:
+            error_msg = f"A suite with the name '{final_suite_name}' and dog size '{dog_size}' already exists."
+        else:
+            st.session_state.kennel_suites.append({
+                "id": str(uuid.uuid4()),
+                "suite_name": final_suite_name,
+                "dog_size": dog_size,
+                "price_per_night": price_per_night,
+                "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
+                "num_kennels": num_kennels,
+                "features": [f.strip() for f in features.split("\n") if f.strip()],
+            })
+            st.success(f"Added suite: {final_suite_name}")
+    if error_msg:
+        st.error(error_msg)
 
 # --- Display Suites as Cards ---
 if st.session_state.kennel_suites:
@@ -62,44 +66,29 @@ if st.session_state.kennel_suites:
         <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
             <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (1 Dog)</h2>
             <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span><br>
-            <ul style='margin:10px 0 6px 0; padding-left:18px;'>
-                <li>{suite.get('suite_length', '')}x{suite.get('suite_width', '')} ft Indoor Suite</li>
-                <li>{suite['potty_breaks']} Daily Potty Break{'s' if suite['potty_breaks']!=1 else ''}</li>
-                <li>Accommodates up to {suite['accommodates_lbs']} lbs</li>
+            <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
+                <li>Dog size: {suite['dog_size']}</li>
+                <li>Number of kennels: {suite['num_kennels']}</li>
             </ul>
-            <ul style='color:#2a3e5c; font-size:1.07em; margin:0 0 0 18px; padding-left:0;'>
-                {''.join([f'<li>{f}</li>' for f in suite['features']])}
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-        # Two dog card for price_two_dogs
-        if suite.get('price_two_dogs', 0) > 0:
-            st.markdown(f"""
-            <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
-                <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (2 Dogs)</h2>
-                <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_two_dogs'])}</span><span style='color:#fcbf49;'>/night</span><br>
-                <ul style='margin:10px 0 6px 0; padding-left:18px;'>
-                    <li>{suite.get('suite_length', '')}x{suite.get('suite_width', '')} ft Indoor Suite</li>
-                    <li>{suite['potty_breaks']} Daily Potty Break{'s' if suite['potty_breaks']!=1 else ''}</li>
-                    <li>Accommodates up to {suite['accommodates_lbs']} lbs</li>
-                </ul>
-                <ul style='color:#2a3e5c; font-size:1.07em; margin:0 0 0 18px; padding-left:0;'>
+            <div style='margin:10px 0 0 18px;'>
+                <strong style='color:#000;'>Features:</strong>
+                <ul style='color:#000; font-size:1.07em; margin:4px 0 0 0; padding-left:18px;'>
                     {''.join([f'<li>{f}</li>' for f in suite['features']])}
                 </ul>
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """, unsafe_allow_html=True)
         # Two dog card for price_two_dogs_same_kennel
         if suite.get('price_two_dogs_same_kennel', 0) > 0:
             st.markdown(f"""
             <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
                 <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (2 Dogs - Shared Kennel)</h2>
                 <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_two_dogs_same_kennel'])}</span><span style='color:#fcbf49;'>/night</span><br>
-                <ul style='margin:10px 0 6px 0; padding-left:18px;'>
-                    <li>{suite.get('suite_length', '')}x{suite.get('suite_width', '')} ft Indoor Suite</li>
-                    <li>{suite['potty_breaks']} Daily Potty Break{'s' if suite['potty_breaks']!=1 else ''}</li>
-                    <li>Accommodates up to {suite['accommodates_lbs']} lbs</li>
+                <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
+                    <li>Dog size: {suite['dog_size']}</li>
+                    <li>Number of kennels: {suite['num_kennels']}</li>
                 </ul>
-                <ul style='color:#2a3e5c; font-size:1.07em; margin:0 0 0 18px; padding-left:0;'>
+                <ul style='color:#000; font-size:1.07em; margin:0 0 0 18px; padding-left:0;'>
                     {''.join([f'<li>{f}</li>' for f in suite['features']])}
                 </ul>
             </div>
