@@ -1,6 +1,8 @@
 import streamlit as st
 import uuid
+from datetime import datetime
 from _shared_center_select_hidden import center_manager_selector
+from supabase_config import save_to_supabase, fetch_from_supabase
 
 st.set_page_config(page_title="Day Camp Pricing", layout="wide")
 dm_selected, center_selected, full_address = center_manager_selector()
@@ -29,11 +31,30 @@ with st.form("submit_daily_options"):
         st.text("Full Day of Play\nGroup Activities\nRegular Exercise\nDaily Updates")
     daily_submitted = st.form_submit_button("Submit Daily Options")
     if daily_submitted:
-        st.session_state.daycamp_daily = {
+        # Prepare data for both session state and Supabase
+        daily_data = {
             "dropin": daily_dropin_price,
             "halfday": half_day_price,
             "weekend": weekend_price
         }
+        
+        # Save to session state for UI display
+        st.session_state.daycamp_daily = daily_data
+        
+        # Prepare data for Supabase with additional fields
+        supabase_data = {
+            **daily_data,
+            "center_name": center_selected,
+            "district_manager": dm_selected,
+            "full_address": full_address
+        }
+        
+        # Save to Supabase
+        success, message = save_to_supabase("daycamp_daily", supabase_data)
+        if success:
+            st.success(f"✅ {message}")
+        else:
+            st.error(message)
 
 # --- Daycamp Packages ---
 st.header("Daycamp Packages")
@@ -46,12 +67,34 @@ with st.form("add_daycamp_package_form"):
     package_expiration = st.text_input("Expiration Policy (e.g., 30-day expiration)")
     submitted = st.form_submit_button("Add Package")
     if submitted:
-        st.session_state.daycamp_packages.append({
-            "id": str(uuid.uuid4()),
+        # Generate a unique ID
+        package_id = str(uuid.uuid4())
+        
+        # Prepare data for session state
+        package_data = {
+            "id": package_id,
             "days": package_days,
             "price": package_price,
             "expiration": package_expiration
-        })
+        }
+        
+        # Save to session state for UI display
+        st.session_state.daycamp_packages.append(package_data)
+        
+        # Prepare data for Supabase with additional fields
+        supabase_data = {
+            **package_data,
+            "center_name": center_selected,
+            "district_manager": dm_selected,
+            "full_address": full_address
+        }
+        
+        # Save to Supabase
+        success, message = save_to_supabase("daycamp_packages", supabase_data)
+        if success:
+            st.success(f"✅ {message}")
+        else:
+            st.error(message)
         st.success(f"Added {package_days}-Day Package")
 
 if st.session_state.daycamp_packages:
@@ -82,6 +125,32 @@ if st.session_state.get("daycamp_daily"):
         <ul><li>Full Day of Play</li><li>Group Activities</li><li>Regular Exercise</li><li>Daily Updates</li></ul>
     </div>
     """, unsafe_allow_html=True)
+
+# Add a section for managing existing Supabase records
+st.divider()
+st.subheader("Data Management")
+
+with st.expander("View Records in Supabase"):
+    if st.button("Refresh Data"):
+        tab1, tab2 = st.tabs(["Daily Options", "Packages"])
+        
+        with tab1:
+            st.subheader("Daily Options in Database")
+            daily_records = fetch_from_supabase("daycamp_daily", center_selected)
+            if daily_records:
+                for record in daily_records:
+                    st.json(record)
+            else:
+                st.info("No daily options found in database for this center.")
+                
+        with tab2:
+            st.subheader("Packages in Database")
+            package_records = fetch_from_supabase("daycamp_packages", center_selected)
+            if package_records:
+                for record in package_records:
+                    st.json(record)
+            else:
+                st.info("No packages found in database for this center.")
 
 st.divider()
 st.markdown("""

@@ -1,33 +1,14 @@
 import streamlit as st
-import pandas as pd
 import uuid
+from datetime import datetime
+from supabase_config import save_to_supabase, fetch_from_supabase, delete_from_supabase
+from _shared_center_select_hidden import center_manager_selector
 
 st.set_page_config(page_title="Best Friends Pet Care Center Pricing", layout="wide")
 
-# --- Load center data ---
-center_df = pd.read_excel("Best Friends Location Info.xlsx")
-# Normalize column names for robust access
-center_df.columns = [c.strip().lower() for c in center_df.columns]
-
-# Use correct column names from your sheet
-manager_col = "district manager"
-center_col = "ctr name"
-address_col = "full address"
-
-manager_list = sorted(center_df[manager_col].dropna().unique())
-
-# --- District Manager selection ---
-st.header("Center & Manager Information")
-dm_selected = st.selectbox("Select your District Manager", manager_list)
-filtered_centers = center_df[center_df[manager_col] == dm_selected]
-center_names = filtered_centers[center_col].dropna().unique()
-center_selected = st.selectbox("Select your Center", center_names)
-center_row = filtered_centers[filtered_centers[center_col] == center_selected].iloc[0]
-full_address = center_row.get(address_col, "")
-
-st.markdown(f"**Selected Center:** {center_selected}")
-st.markdown(f"**Full Address:** {full_address}")
-st.markdown(f"**District Manager:** {dm_selected}")
+# Use the shared center selector (reads from Supabase with Excel fallback)
+dm_selected, center_selected, full_address = center_manager_selector()
+# The center info is already displayed in the center_manager_selector function
 
 st.image("bf_logo.png", width=120)
 st.title("Best Friends Pet Care Center Pricing")
@@ -70,19 +51,49 @@ with st.form("add_kennel_suite_form"):
         elif duplicate:
             error_msg = f"A suite with the name '{final_suite_name}' and dog size '{dog_size}' already exists."
         else:
-            st.session_state.kennel_suites.append({
-                "id": str(uuid.uuid4()),
+            # Generate a unique ID
+            suite_id = str(uuid.uuid4())
+            
+            # Prepare features as a list
+            feature_list = [f.strip() for f in features.split("\n") if f.strip()]
+            
+            # Create suite data for session state
+            suite_data = {
+                "id": suite_id,
                 "suite_name": final_suite_name,
                 "dog_size": dog_size,
                 "price_per_night": price_per_night,
                 "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
                 "num_kennels": num_kennels,
-                "features": [f.strip() for f in features.split("\n") if f.strip()],
+                "features": feature_list,
                 "ctr_name": center_selected,
                 "full_address": full_address,
                 "district_manager": dm_selected,
-            })
-            st.success(f"Added suite: {final_suite_name}")
+            }
+            
+            # Save to session state for UI display
+            st.session_state.kennel_suites.append(suite_data)
+            
+            # Prepare data for Supabase
+            supabase_data = {
+                "id": suite_id,
+                "center_name": center_selected,  # Match the database column name
+                "district_manager": dm_selected,
+                "full_address": full_address,
+                "suite_name": final_suite_name,
+                "dog_size": dog_size,
+                "price_per_night": price_per_night,
+                "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
+                "num_kennels": num_kennels,
+                "features": feature_list  # Supabase will convert this to JSONB
+            }
+            
+            # Save to Supabase
+            success, message = save_to_supabase("kennel_suites", supabase_data)
+            if success:
+                st.success(f"Added suite: {final_suite_name} - ✅ Saved to database!")
+            else:
+                st.error(f"Suite added locally but failed to save to database: {message}")
     if error_msg:
         st.error(error_msg)
 
@@ -131,6 +142,29 @@ if st.session_state.kennel_suites:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+# Add a section for managing existing Supabase records
+st.divider()
+st.subheader("Data Management")
+
+with st.expander("View Records in Supabase"):
+    if st.button("Refresh Data", key="refresh_kennel_data"):
+        st.subheader("Kennel Suites in Database")
+        suite_records = fetch_from_supabase("kennel_suites", center_selected)
+        if suite_records:
+            for record in suite_records:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.json(record)
+                with col2:
+                    if st.button("Delete", key=f"delete_{record['id']}"):
+                        success, message = delete_from_supabase("kennel_suites", record['id'])
+                        if success:
+                            st.success(f"✅ {message} Refresh to see changes.")
+                        else:
+                            st.error(message)
+        else:
+            st.info("No kennel suites found in database for this center.")
 
 st.divider()
 st.markdown("""
