@@ -82,7 +82,7 @@ with boarding_tab:
         
         # Display each kennel suite with edit/delete options
         for i, suite in enumerate(kennel_data):
-            with st.expander(f"**{suite['suite_name']}** - {suite['dog_sizes']} - ${suite['price_per_night']}/night", expanded=i==0):
+            with st.expander(f"**{suite['suite_name']}** - {', '.join(suite.get('dog_sizes', ['unknown']))} - ${suite['price_per_night']}/night", expanded=i==0):
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
