@@ -82,18 +82,19 @@ with boarding_tab:
         
         # Display each kennel suite with edit/delete options
         for i, suite in enumerate(kennel_data):
-            with st.expander(f"**{suite['suite_name']}** - {suite['dog_size']} - ${suite['price_per_night']}/night", expanded=i==0):
+            with st.expander(f"**{suite['suite_name']}** - {suite['dog_sizes']} - ${suite['price_per_night']}/night", expanded=i==0):
                 col1, col2 = st.columns([3, 1])
                 
                 with col1:
                     # Display card with suite details
                     st.markdown(f"""
                     <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
-                        <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} ({suite['dog_size']})</h2>
-                        <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span><br>
+                        <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']}</h2>
+                        <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span>
+                        {f'<span style="margin-left:15px; color:#6c757d;"><i>(+${int(suite.get("price_additional_dog", 0))} for additional dog)</i></span>' if suite.get('price_additional_dog', 0) > 0 else ''}<br>
                         <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
                             <li>Number of kennels: {suite['num_kennels']}</li>
-                            {f'<li>Two dogs price: ${int(suite["price_two_dogs_same_kennel"])}/night</li>' if suite.get('price_two_dogs_same_kennel') else ''}
+                            <li><b>Compatible Dog Sizes:</b> {', '.join(suite.get('dog_sizes', ['unknown']))}</li>
                         </ul>
                         <div style='margin:10px 0 0 18px;'>
                             <strong style='color:#000;'>Features:</strong>
@@ -111,15 +112,18 @@ with boarding_tab:
                         
                         # Edit fields
                         edit_suite_name = st.text_input("Suite Name", value=suite['suite_name'])
-                        edit_dog_size = st.selectbox("Dog Size", 
-                                                  ["small", "medium", "big", "extra big"],
-                                                  index=["small", "medium", "big", "extra big"].index(suite['dog_size']) if suite['dog_size'] in ["small", "medium", "big", "extra big"] else 0)
+                        # Multi-select for dog sizes
+                        dog_size_options = ["small", "medium", "big", "extra big"]
+                        edit_dog_sizes = st.multiselect("Compatible Dog Sizes", 
+                                                dog_size_options,
+                                                default=suite.get('dog_sizes', ['small']))
                         edit_price = st.number_input("Price per Night ($)", 
                                                  min_value=0.0, 
                                                  value=float(suite['price_per_night']))
-                        edit_two_dogs_price = st.number_input("Price for Two Dogs ($)", 
-                                                         min_value=0.0, 
-                                                         value=float(suite.get('price_two_dogs_same_kennel', 0)))
+                        edit_additional_dog_price = st.number_input("Price for Additional Dog ($)", 
+                                                          min_value=0.0, 
+                                                          value=float(suite.get('price_additional_dog', 0)),
+                                                          help="Price for a second dog in the same kennel")
                         edit_num_kennels = st.number_input("Number of Kennels", 
                                                       min_value=0, 
                                                       value=int(suite['num_kennels']))
@@ -143,9 +147,9 @@ with boarding_tab:
                         if update_submitted:
                             updated_data = {
                                 "suite_name": edit_suite_name,
-                                "dog_size": edit_dog_size,
+                                "dog_sizes": edit_dog_sizes,
                                 "price_per_night": edit_price,
-                                "price_two_dogs_same_kennel": edit_two_dogs_price if edit_two_dogs_price > 0 else None,
+                                "price_additional_dog": edit_additional_dog_price if edit_additional_dog_price > 0 else None,
                                 "num_kennels": edit_num_kennels,
                                 "features": edit_features_list,
                                 "updated_at": datetime.utcnow().isoformat()
@@ -344,7 +348,9 @@ else:
                 st.markdown("#### Kennel Suites")
                 if len(st.session_state.center_data["kennel_suites"]) > 0:
                     for i, suite in enumerate(st.session_state.center_data["kennel_suites"]):
-                        st.markdown(f"{i+1}. **{suite['suite_name']}** - {suite['dog_size']} - ${suite['price_per_night']}/night")
+                        # Create the additional dog price text separately to avoid nested f-string complexity
+                        additional_price_text = f"(+${suite.get('price_additional_dog', 0)} for additional dog)" if suite.get('price_additional_dog', 0) > 0 else ""
+                        st.markdown(f"{i+1}. **{suite['suite_name']}** - {', '.join(suite.get('dog_sizes', ['unknown']))} - ${suite['price_per_night']}/night {additional_price_text}")
                 else:
                     st.markdown("_No kennel suites submitted_")
                 

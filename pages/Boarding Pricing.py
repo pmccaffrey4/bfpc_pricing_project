@@ -29,12 +29,16 @@ with st.form("add_kennel_suite_form"):
         suite_name_custom = st.text_input("Please specify suite name")
     final_suite_name = suite_name_custom.strip() if suite_name == "Other" else suite_name
 
-    dog_size = st.selectbox(
-        "Size of dog",
-        ["small", "medium", "big", "extra big"]
+    dog_sizes = st.multiselect(
+        "Dog sizes this kennel can accommodate",
+        ["small", "medium", "big", "extra big"],
+        default=["small"],
+        help="Select all dog sizes this kennel type can accommodate"
     )
     price_per_night = st.number_input("Price per Dog per Night ($)", min_value=0.0, step=1.0)
-    price_two_dogs_same_kennel = st.number_input("Price per Night for 2 Dogs ($) - Shared Kennel", min_value=0.0, step=1.0)
+    price_additional_dog = st.number_input("Price for Additional Dog in Same Kennel ($)", 
+                                   min_value=0.0, step=1.0, 
+                                   help="How much to charge for a second dog in the same kennel")
     num_kennels = st.number_input("Number of kennels of this type", min_value=0, step=1, format="%d")
 
     features = st.text_area(
@@ -43,13 +47,13 @@ with st.form("add_kennel_suite_form"):
     )
     submitted = st.form_submit_button("Add Suite")
     error_msg = ""
-    # Prevent duplicate suites (same name + dog size)
-    duplicate = any(s["suite_name"].lower() == final_suite_name.lower() and s["dog_size"] == dog_size for s in st.session_state.kennel_suites)
+    # Prevent duplicate suites (just by name - one entry can now handle multiple dog sizes)
+    duplicate = any(s["suite_name"].lower() == final_suite_name.lower() for s in st.session_state.kennel_suites)
     if submitted:
         if suite_name == "Other" and not final_suite_name:
             error_msg = "Please enter a custom suite name."
         elif duplicate:
-            error_msg = f"A suite with the name '{final_suite_name}' and dog size '{dog_size}' already exists."
+            error_msg = f"A suite with the name '{final_suite_name}' already exists. Please use a different name."
         else:
             # Generate a unique ID
             suite_id = str(uuid.uuid4())
@@ -61,9 +65,9 @@ with st.form("add_kennel_suite_form"):
             suite_data = {
                 "id": suite_id,
                 "suite_name": final_suite_name,
-                "dog_size": dog_size,
+                "dog_sizes": dog_sizes,
                 "price_per_night": price_per_night,
-                "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
+                "price_additional_dog": price_additional_dog,
                 "num_kennels": num_kennels,
                 "features": feature_list,
                 "ctr_name": center_selected,
@@ -81,9 +85,9 @@ with st.form("add_kennel_suite_form"):
                 "district_manager": dm_selected,
                 "full_address": full_address,
                 "suite_name": final_suite_name,
-                "dog_size": dog_size,
+                "dog_sizes": dog_sizes,  # Using the new JSONB column
                 "price_per_night": price_per_night,
-                "price_two_dogs_same_kennel": price_two_dogs_same_kennel,
+                "price_additional_dog": price_additional_dog,  # Using the renamed column
                 "num_kennels": num_kennels,
                 "features": feature_list  # Supabase will convert this to JSONB
             }
@@ -101,16 +105,17 @@ with st.form("add_kennel_suite_form"):
 if st.session_state.kennel_suites:
     st.subheader("Current Suites")
     for suite in st.session_state.kennel_suites:
-        # Single dog card
+        # Single dog card - updated to show all dog sizes
         st.markdown(f"""
         <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
-            <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (1 Dog)</h2>
-            <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span><br>
+            <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']}</h2>
+            <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_per_night'])}</span><span style='color:#fcbf49;'>/night</span>
+            {f'<span style="margin-left:15px; color:#6c757d;"><i>(+${int(suite.get("price_additional_dog", 0))} for additional dog)</i></span>' if suite.get('price_additional_dog', 0) > 0 else ''}<br>
             <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
                 <li><b>District Manager:</b> {suite['district_manager']}</li>
                 <li><b>Center Name:</b> {suite['ctr_name']}</li>
                 <li><b>Full Address:</b> {suite['full_address']}</li>
-                <li>Dog size: {suite['dog_size']}</li>
+                <li><b>Compatible Dog Sizes:</b> {', '.join(suite['dog_sizes'])}</li>
                 <li>Number of kennels: {suite['num_kennels']}</li>
             </ul>
             <div style='margin:10px 0 0 18px;'>
@@ -121,27 +126,7 @@ if st.session_state.kennel_suites:
             </div>
         </div>
         """, unsafe_allow_html=True)
-        # Two dog card for price_two_dogs_same_kennel
-        if suite.get('price_two_dogs_same_kennel', 0) > 0:
-            st.markdown(f"""
-            <div style='background-color:#eaf0fb; border-radius:18px; padding:24px; margin-bottom:18px; box-shadow: 0 2px 8px #00000010;'>
-                <h2 style='margin-bottom:4px; color:#2a3e5c;'><span style='font-size:1.3em;'>🏠</span> {suite['suite_name']} (2 Dogs - Shared Kennel)</h2>
-                <span style='font-size:2em; color:#fcbf49; font-weight:bold;'>${int(suite['price_two_dogs_same_kennel'])}</span><span style='color:#fcbf49;'>/night</span><br>
-                <ul style='margin:10px 0 6px 0; padding-left:18px; color:#000;'>
-                    <li><b>District Manager:</b> {suite['district_manager']}</li>
-                    <li><b>Center Name:</b> {suite['ctr_name']}</li>
-                    <li><b>Full Address:</b> {suite['full_address']}</li>
-                    <li>Dog size: {suite['dog_size']}</li>
-                    <li>Number of kennels: {suite['num_kennels']}</li>
-                </ul>
-                <div style='margin:10px 0 0 18px;'>
-                    <strong style='color:#000;'>Features:</strong>
-                    <ul style='color:#000; font-size:1.07em; margin:4px 0 0 0; padding-left:18px;'>
-                        {''.join([f'<li>{f}</li>' for f in suite['features']])}
-                    </ul>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        # We no longer need a separate card for 2 dogs
 
 # Add a section for managing existing Supabase records
 st.divider()
